@@ -1,0 +1,94 @@
+# List of known dependencies for the Lumina Desktop (and associated utilities)
+# FreeBSD port is listed in parentheses after the dependency whenever possible
+# Linux packages are listed by name as they appear in Debian, Ubuntu and Mint
+
+=== FreeBSD Requirements ===
+
+Runtime dependencies:
+
+fluxbox (x11-wm/fluxbox)
+fluxbox styles pack? (x11-themes/fluxbox-tenr-styles-pack)
+oxygen icon theme (x11-themes/kde4-icons-oxygen)
+xscreensaver & xscreensaver-demo  (x11/xscreensaver)
+numlockx (x11/numlockx)
+
+shutdown (/sbin/shutdown - built in) (System restart/poweroff)
+mount (/sbin/mount - built in) (Device Availability)
+apm (/usr/sbin/apm - built in) (Advanced Power Management utility)
+mixer (/usr/sbin/mixer - built in) (Audio System Mixer)
+xbrightness (x11/xbrightness) (Screen Brightness Control)
+
+
+Build time dependencies:
+== (Version 0.7.2) ==
+Qt 4.8+ 
+  qt4-core (devel/qt4-corelib))
+  qt4-gui (x11-toolkits/qt4-gui)
+  qmake-qt4 (devel/qmake4)
+  qt4-network (net/qt4-network)
+  qt4-linguist (devel/qt4-linguist)
+  qt4-svg (graphics/qt4-svg)
+  qt4-uiv (devel/qt4-uic)
+  qt4-moc (devel/qt4-moc)
+  qt4-rcc (devel/qt4-rcc)
+  devel/qt4-qtsolutions-singleapplication
+ 
+X.org and XLib with extensions: 
+  Xrender (x11/libXrender)
+  Xcomposite (x11/libXcomposite)
+  Xdamage (x11/libXdamage)
+  
+== (Version 0.8.0+) ==
+Qt 5.2+
+  qt5-core
+  qt5-buildtools
+  qt5-gui
+  qt5-widgets
+  qt5-multimedia
+  qt5-network
+  qt5-qmake
+  qt5-svg
+  qt5-x11extras
+
+X.org and XCB extensions (possibly the XLib libraries above during the transition phase):
+  libxcb
+  xcb-util-wm (window manager framework)
+  xcb-damage (included in base XCB lib?)
+  xcb-composite (included in base XCB lib?)
+  xcb-render (included in base XCB lib?)
+
+
+  
+=== Linux Requirements ===
+  These packages are required for building Lumina on Linux
+  build-essential (this supplies g++, though clang should work too)
+  qt5-default
+  qttools5-dev-tools
+  libqt5gui5 
+  qtmultimedia5-dev
+  libqt5multimediawidgets5
+  libqt5network5 
+  libqt5svg5-dev
+  libqt5x11extras5-dev
+  libxcb-icccm4-dev
+  libxcb-ewmh-dev
+  libxcb-composite0-dev
+  libxcb-damage0-dev
+  libxcb-util0-dev
+  libphonon-dev
+  libxcomposite-dev
+  libxdamage-dev
+  libxrender-dev
+  libxcb-image0-dev
+
+  These packages are required for running Lumina on Linux
+  fluxbox
+  kde-style-oxygen
+  xscreensaver
+
+  Optional packages
+  xbacklight  (required for changing screen brightness)
+  alsa-utils  (required for adjusting audio volume)
+  acpi        (required for monitoring battery life)
+  numlockx    (required for changing state of numlock at login)
+  pavucontrol (required for detatched audio mixer)
