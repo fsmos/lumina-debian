@@ -114,7 +114,7 @@ Description: Desktop file editor for the lumina desktop environment
 
 Package: lumina-data
 Architecture: all
-Depends: ${misc:Depends}, libluminautils1, lumina-desktop
+Depends: ${misc:Depends}, libluminautils1
 Replaces: lumina-core (<< 0.8.3.372)
 Description: Data files for the lumina Desktop environment
  This package provides
