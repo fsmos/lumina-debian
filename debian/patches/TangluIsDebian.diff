@@ -1,0 +1,22 @@
+--- a/libLumina/libLumina.pro
++++ b/libLumina/libLumina.pro
+@@ -49,7 +49,7 @@
+   LINUX_DISTRIBUTION = $$system(lsb_release -si)
+ }
+ 
+-equals(LINUX_DISTRIBUTION, "Debian"): {
++equals(LINUX_DISTRIBUTION, "Tanglu"): {
+ 	SOURCES += LuminaOS-Debian.cpp
+ } else {
+ 	SOURCES += LuminaOS-Linux.cpp
+--- a/libLumina/LuminaOS-Debian.cpp
++++ b/libLumina/LuminaOS-Debian.cpp
+@@ -13,7 +13,7 @@
+ //can't read xbrightness settings - assume invalid until set
+ static int screenbrightness = -1;
+ 
+-QString LOS::OSName(){ return "Debian GNU/Linux"; }
++QString LOS::OSName(){ return "Tanglu GNU/Linux"; }
+ 
+ //OS-specific prefix(s)
+ QString LOS::AppPrefix(){ return "/usr/"; } //Prefix for applications
