@@ -40,12 +40,14 @@ public:
 	
 	int Screen(); //return the screen number this object is managing
 	void show();
-	//void hide();
+	void hide();
 	void prepareToClose();
 
 	WId backgroundID();
 	QRect availableScreenGeom();
 
+	void UpdateGeometry();
+	
 public slots:
 	void SystemLogout();
 	void SystemTerminal();
@@ -81,11 +83,15 @@ private slots:
 	void InitDesktop();
 	void SettingsChanged();
 	void UnlockSettings(){ issyncing=false; }
+	void LocaleChanged();
+	
 	//Menu functions
 	void UpdateMenu(bool fast = false);
-	void ShowMenu(){
+	void ShowMenu(const QPoint &pt = QPoint()){
 	  UpdateMenu(true); //run the fast version
-	  deskMenu->popup(QCursor::pos());
+	  //qDebug() << "Show Context Menu:" << QCursor::pos() << pt;
+	  if(pt.isNull()){ deskMenu->popup(QCursor::pos()); }
+	  else{ deskMenu->popup( bgWindow->mapToGlobal(pt)); }
 	}
 	void UpdateWinMenu();
 	void winClicked(QAction*);
@@ -101,11 +107,5 @@ private slots:
 	void UpdateDesktopPluginArea(); //make sure the area is not underneath any panels
 
 	void UpdateBackground();
-	void UpdateGeometry(int screen){
-	  if(screen==desktopnumber){
-	    bgWindow->setGeometry(desktop->screenGeometry(desktopnumber));
-	    QTimer::singleShot(0, this, SLOT(UpdatePanels()));
-	  }
-	}
 };
 #endif

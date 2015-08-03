@@ -6,6 +6,7 @@
 //===========================================
 #include "LuminaXDG.h"
 #include "LuminaOS.h"
+#include "LuminaUtils.h"
 #include <QObject>
 #include <QMediaPlayer>
 
@@ -16,73 +17,103 @@ static qint64 mimechecktime;
 XDGDesktop LXDG::loadDesktopFile(QString filePath, bool& ok){
   //Create the outputs
   ok=false;
-  //following the specifications, Name and Type are the mandatory in any .desktop file
-  //bool hasName=false, hasType=false; 
   XDGDesktop DF;
     DF.isHidden=false;
     DF.useTerminal=false;
     DF.startupNotify=false;
     DF.type = XDGDesktop::APP;
     DF.filePath = filePath;
+    DF.lastRead = QDateTime::currentDateTime();
     DF.exec = DF.tryexec = "";   // just to make sure this is initialized
-  //Check input file path validity
-  QFile file(filePath);
-  if(!file.exists()){ return DF; } //invalid file
+
   //Get the current localization code
   QString lang = QLocale::system().name(); //lang code
-  //Open the file
-  if(!file.open(QIODevice::Text | QIODevice::ReadOnly)){
-    return DF;  
-  }
-  QTextStream os(&file);
+  QString slang = lang.section("_",0,0); //short lang code
+
   //Read in the File
   bool insection=false;
-  while(!os.atEnd()){
-    QString line = os.readLine();
-    //Check that this is the entry portion of the file (not the action/other sections)
+  bool inaction=false;
+  QStringList file = LUtils::readFile(filePath);
+  if(file.isEmpty()){ return DF; }
+  //if(filePath.contains("pcbsd")){ qDebug() << "Check File:" << filePath << lang << slang; }
+  XDGDesktopAction CDA; //current desktop action
+  for(int i=0; i<file.length(); i++){
+    QString line = file[i];
+    //if(filePath.contains("pcbsd")){ qDebug() << " - Check Line:" << line << inaction << insection; }
+    //Check if this is the end of a section
+    if(line.startsWith("[") && inaction){ 
+      insection=false; inaction=false;
+      //Add the current Action structure to the main desktop structure if appropriate
+      if(!CDA.ID.isEmpty()){ DF.actions << CDA; CDA = XDGDesktopAction(); }
+    }else if(line.startsWith("[")){ insection=false; inaction = false; }
+    //Now check if this is the beginning of a section
     if(line=="[Desktop Entry]"){ insection=true; continue; }
-    else if(line.startsWith("[")){ insection=false; }
-    if(!insection || line.startsWith("#")){ continue; }
+    else if(line.startsWith("[Desktop Action ")){ 
+      //Grab the ID of the action out of the label
+      CDA.ID = line.section("]",0,0).section("Desktop Action",1,1).simplified();
+      inaction = true;
+      continue;
+    }else if( (!insection && !inaction) || line.startsWith("#")){ continue; }
     //Now parse out the file
     line = line.simplified();
     QString var = line.section("=",0,0).simplified();
     QString loc = var.section("[",1,1).section("]",0,0).simplified(); // localization
     var = var.section("[",0,0).simplified(); //remove the localization
     QString val = line.section("=",1,50).simplified();
+    //if(filePath.contains("pcbsd")){ qDebug() << " -- " << var << val << loc; }
     //-------------------
     if(var=="Name"){ 
-      if(DF.name.isEmpty() && loc.isEmpty()){ DF.name = val; }
-      else if(loc == lang){ DF.name = val; }
+      if(insection){
+        if(DF.name.isEmpty() && loc.isEmpty()){ DF.name = val; }
+	else if(DF.name.isEmpty() && loc==slang){ DF.name = val; } //short locale code
+        else if(loc == lang){ DF.name = val; }
+      }else if(inaction){
+        if(CDA.name.isEmpty() && loc.isEmpty()){ CDA.name = val; }
+	else if(CDA.name.isEmpty() && loc==slang){ CDA.name = val; } //short locale code
+        else if(loc == lang){ CDA.name = val; }	      
+      }
       //hasName = true;
-    }else if(var=="GenericName"){ 
+    }else if(var=="GenericName" && insection){ 
       if(DF.genericName.isEmpty() && loc.isEmpty()){ DF.genericName = val; }
+      else if(DF.genericName.isEmpty() && loc==slang){ DF.genericName = val; } //short locale code
       else if(loc == lang){ DF.genericName = val; }
-    }else if(var=="Comment"){ 
+    }else if(var=="Comment" && insection){ 
       if(DF.comment.isEmpty() && loc.isEmpty()){ DF.comment = val; }
+      else if(DF.comment.isEmpty() && loc==slang){ DF.comment = val; } //short locale code
       else if(loc == lang){ DF.comment = val; }
     }else if(var=="Icon"){ 
-      if(DF.icon.isEmpty() && loc.isEmpty()){ DF.icon = val; }
-      else if(loc == lang){ DF.icon = val; }
+      if(insection){
+        if(DF.icon.isEmpty() && loc.isEmpty()){ DF.icon = val; }
+	else if(DF.icon.isEmpty() && loc==slang){ DF.icon = val; } //short locale code
+        else if(loc == lang){ DF.icon = val; }
+      }else if(inaction){
+	if(CDA.icon.isEmpty() && loc.isEmpty()){ CDA.icon = val; }
+	else if(CDA.icon.isEmpty() && loc==slang){ CDA.icon = val; } //short locale code
+        else if(loc == lang){ CDA.icon = val; }
+      }
     }
-    else if( (var=="TryExec") && (DF.tryexec.isEmpty()) ) { DF.tryexec = val; }
-    else if( (var=="Exec") && (DF.exec.isEmpty() ) ) { DF.exec = val; }   // only take the first Exec command in the file
-    else if( (var=="Path") && (DF.path.isEmpty() ) ){ DF.path = val; }
-    else if(var=="NoDisplay" && !DF.isHidden){ DF.isHidden = (val.toLower()=="true"); }
-    else if(var=="Hidden" && !DF.isHidden){ DF.isHidden = (val.toLower()=="true"); }
-    else if(var=="Categories"){ DF.catList = val.split(";",QString::SkipEmptyParts); }
-    else if(var=="OnlyShowIn"){ DF.showInList = val.split(";",QString::SkipEmptyParts); }
-    else if(var=="NotShowIn"){ DF.notShowInList = val.split(";",QString::SkipEmptyParts); }
-    else if(var=="Terminal"){ DF.useTerminal= (val.toLower()=="true"); }
-    else if(var=="Actions"){ DF.actionList = val.split(";",QString::SkipEmptyParts); }
-    else if(var=="MimeType"){ DF.mimeList = val.split(";",QString::SkipEmptyParts); }
-    else if(var=="Keywords"){ 
+    else if( (var=="TryExec") && (DF.tryexec.isEmpty()) && insection) { DF.tryexec = val; }
+    else if(var=="Exec"){
+      if(insection && DF.exec.isEmpty() ){ DF.exec = val; }
+      else if(inaction && CDA.exec.isEmpty() ){ CDA.exec = val; }
+    }	    
+    else if( (var=="Path") && (DF.path.isEmpty() ) && insection){ DF.path = val; }
+    else if(var=="NoDisplay" && !DF.isHidden && insection){ DF.isHidden = (val.toLower()=="true"); }
+    else if(var=="Hidden" && !DF.isHidden && insection){ DF.isHidden = (val.toLower()=="true"); }
+    else if(var=="Categories" && insection){ DF.catList = val.split(";",QString::SkipEmptyParts); }
+    else if(var=="OnlyShowIn" && insection){ DF.showInList = val.split(";",QString::SkipEmptyParts); }
+    else if(var=="NotShowIn" && insection){ DF.notShowInList = val.split(";",QString::SkipEmptyParts); }
+    else if(var=="Terminal" && insection){ DF.useTerminal= (val.toLower()=="true"); }
+    else if(var=="Actions" && insection){ DF.actionList = val.split(";",QString::SkipEmptyParts); }
+    else if(var=="MimeType" && insection){ DF.mimeList = val.split(";",QString::SkipEmptyParts); }
+    else if(var=="Keywords" && insection){ 
       if(DF.keyList.isEmpty() && loc.isEmpty()){ DF.keyList = val.split(";",QString::SkipEmptyParts); }
       else if(loc == lang){ DF.keyList = val.split(";",QString::SkipEmptyParts); }
     }
-    else if(var=="StartupNotify"){ DF.startupNotify = (val.toLower()=="true"); }
-    else if(var=="StartupWMClass"){ DF.startupWM = val; }
-    else if(var=="URL"){ DF.url = val;}
-    else if(var=="Type"){
+    else if(var=="StartupNotify" && insection){ DF.startupNotify = (val.toLower()=="true"); }
+    else if(var=="StartupWMClass" && insection){ DF.startupWM = val; }
+    else if(var=="URL" && insection){ DF.url = val;}
+    else if(var=="Type" && insection){
       if(val.toLower()=="application"){ DF.type = XDGDesktop::APP; }
       else if(val.toLower()=="link"){ DF.type = XDGDesktop::LINK; }
       else if(val.toLower()=="dir"){ DF.type = XDGDesktop::DIR; }
@@ -90,7 +121,7 @@ XDGDesktop LXDG::loadDesktopFile(QString filePath, bool& ok){
       //hasType = true;
     }
   } //end reading file
-  file.close();
+  //file.close();
   //If there are OnlyShowIn desktops listed, add them to the name
   if( !DF.showInList.isEmpty() && !DF.showInList.contains("Lumina", Qt::CaseInsensitive) ){
     /*QStringList added;
@@ -381,14 +412,25 @@ QList<XDGDesktop> LXDG::sortDesktopNames(QList<XDGDesktop> apps){
   return out;
 }
 
-QString LXDG::getDesktopExec(XDGDesktop app){
+QString LXDG::getDesktopExec(XDGDesktop app, QString ActionID){
   //Generate the executable line for the application
   QString out;
-  if(app.exec.isEmpty()){ return ""; }
+  QString exec = app.exec;
+  if( !ActionID.isEmpty() ){
+    //Go through and grab the proper exec for the listed action
+    for(int i=0; i<app.actions.length(); i++){
+      if(app.actions[i].ID == ActionID){
+        exec = app.actions[i].exec;
+        break;
+      }
+    }
+  }
+  
+  if(exec.isEmpty()){ return ""; }
   else if(app.useTerminal){
-    out = "xterm -lc -e "+app.exec;  
+    out = "xterm -lc -e "+exec;  
   }else{
-    out = app.exec;
+    out =exec;
   }
   //Now perform any of the XDG flag substitutions as appropriate (9/2014 standards)
   if(out.contains("%i") && !app.icon.isEmpty() ){ out.replace("%i", "--icon \'"+app.icon+"\'"); }
@@ -416,7 +458,7 @@ QIcon LXDG::findIcon(QString iconName, QString fallback){
   bool DEBUG =false;
   if(DEBUG){ qDebug() << "[LXDG] Find icon for:" << iconName; }
   if(QFile::exists(iconName) && iconName.startsWith("/")){ return QIcon(iconName); }
-  else if(iconName.startsWith("/")){ iconName.section("/",-1); } //Invalid absolute path, just looks for the icon
+  else if(iconName.startsWith("/")){ iconName.section("/",-1); } //Invalid absolute path, just look for the icon
   //Check if the icon is actually given
   if(iconName.isEmpty()){ 
     if(fallback.isEmpty()){  return QIcon(); }
@@ -446,7 +488,7 @@ QIcon LXDG::findIcon(QString iconName, QString fallback){
   QIcon ico = QIcon::fromTheme(iconName);
   //Try to load the icon from /usr/local/share/pixmaps
   if( ico.isNull() ){
-    //qDebug() << "Could not find icon:" << iconName;
+    //qDebug() << "Could not find icon:" << iconName <<"In Theme:" << cTheme;
     QDir base(LOS::AppPrefix()+"share/pixmaps");
     QStringList matches = base.entryList(QStringList() << "*"+iconName+"*", QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
     if( !matches.isEmpty() ){

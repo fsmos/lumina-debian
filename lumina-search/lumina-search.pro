@@ -6,7 +6,7 @@ TARGET = lumina-search
 isEmpty(PREFIX) {
  PREFIX = /usr/local
 }
-target.path = $$PREFIX/bin
+target.path = $$DESTDIR$$PREFIX/bin
 
 isEmpty(LIBPREFIX) {
  LIBPREFIX = $$PREFIX/lib
@@ -110,3 +110,7 @@ desktop.files=lumina-search.desktop
 desktop.path=$$PREFIX/share/applications/
 
 INSTALLS += target dotrans desktop
+
+NO_I18N{
+  INSTALLS -= dotrans
+}

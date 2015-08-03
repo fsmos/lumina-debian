@@ -15,14 +15,12 @@
 #include <QUrl>
 #include <QDebug>
 #include <QTranslator>
-//#include <QLocale>
 #include <QMessageBox>
-#include <QSplashScreen>
+#include <QLabel>
 #include <QDateTime>
 #include <QPixmap>
 #include <QColor>
-#include <QFont>
-//#include <QTextCodec>
+#include <QDesktopWidget>
 
 #include "LFileDialog.h"
 
@@ -60,16 +58,19 @@ void showOSD(int argc, char **argv, QString message){
 
   //Display the OSD
   QPixmap pix(":/icons/OSD.png");
-  QSplashScreen splash(pix, Qt::SplashScreen | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
+  QLabel splash(0, Qt::Window | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
      splash.setWindowTitle("");
-     QFont myfont;
-	myfont.setBold(true);
-	myfont.setPixelSize(13);
-	splash.setFont(myfont);
+     splash.setStyleSheet("QLabel{background: black; color: white; font-weight: bold; font-size: 13pt; margin: 1ex;}");
+     splash.setAlignment(Qt::AlignCenter);
+
+
   qDebug() << "Display OSD";
+  splash.setText(message);
+  //Make sure it is centered on the current screen
+  QPoint center = App.desktop()->screenGeometry(QCursor::pos()).center();
+  splash.move(center.x()-(splash.sizeHint().width()/2), center.y()-(splash.sizeHint().height()/2));
   splash.show();
   //qDebug() << " - show message";
-  splash.showMessage(message, Qt::AlignCenter, Qt::white);
   //qDebug() << " - loop";
   QDateTime end = QDateTime::currentDateTime().addMSecs(800);
   while(QDateTime::currentDateTime() < end){ App.processEvents(); }
@@ -148,7 +149,7 @@ void getCMD(int argc, char ** argv, QString& binary, QString& args, QString& pat
   //Get the input file
     //Make sure to load the proper system encoding first
     LUtils::LoadTranslation(0,""); //bypass application modification
-  QString inFile;
+  QString inFile, ActionID;
   bool showDLG = false; //flag to bypass any default application setting
   if(argc > 1){
     for(int i=1; i<argc; i++){
@@ -184,6 +185,9 @@ void getCMD(int argc, char ** argv, QString& binary, QString& args, QString& pat
 	  showOSD(argc,argv, QString(QObject::tr("Screen Brightness %1%")).arg(QString::number(bright)) );
 	}
 	return;
+      }else if( (QString(argv[i]).simplified() =="-action") && (argc>(i+1)) ){
+        ActionID = QString(argv[i+1]);
+	i++; //skip the next input
       }else{
         inFile = QString::fromLocal8Bit(argv[i]);
         break;
@@ -224,7 +228,7 @@ void getCMD(int argc, char ** argv, QString& binary, QString& args, QString& pat
     switch(DF.type){
       case XDGDesktop::APP:
         if(!DF.exec.isEmpty()){
-          cmd = LXDG::getDesktopExec(DF);
+          cmd = LXDG::getDesktopExec(DF,ActionID);
           if(!DF.path.isEmpty()){ path = DF.path; }
 	  watch = DF.startupNotify;
         }else{
@@ -254,6 +258,7 @@ void getCMD(int argc, char ** argv, QString& binary, QString& args, QString& pat
         }
         break;
       default:
+	qDebug() << DF.type << DF.name << DF.icon << DF.exec;
 	ShowErrorDialog( argc, argv, QString(QObject::tr("Unknown type of shortcut : %1")).arg(inFile) );
     }
   }
@@ -346,7 +351,8 @@ int main(int argc, char **argv){
     }
     //qDebug() << "[lumina-open] Finished Cmd:" << cmd << retcode << p->exitStatus();
     if( QFile::exists("/tmp/.luminastopping") ){ watch = false; } //closing down session - ignore "crashes" (app could have been killed during cleanup)
-    if( (retcode > 0) && watch){
+    if( (retcode > 0) && watch && !(retcode==1 && cmd.startsWith("pc-su ")) ){ //pc-su returns 1 if the user cancelles the operation
+      
       qDebug() << "[lumina-open] Application Error:" << retcode;
         //Setup the application
         QApplication App(argc, argv);

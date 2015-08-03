@@ -123,10 +123,13 @@ public:
 	// General Information
 	QList<WId> WindowList(bool rawlist = false); //list all non-Lumina windows (rawlist -> all workspaces)
 	unsigned int CurrentWorkspace();
+	unsigned int NumberOfWorkspaces();
 	WId ActiveWindow(); //fetch the ID for the currently active window
 	
 	//Session Modification
+	bool CheckDisableXinerama(); //returns true if Xinerama was initially set but now disabled
 	void RegisterVirtualRoots(QList<WId> roots);
+	
 
 	//Window Information
 	QString WindowClass(WId);
@@ -141,17 +144,21 @@ public:
 	QString OldWindowName(WId win); //WM_NAME (old standard)
 	QString OldWindowIconName(WId win); //WM_ICON_NAME (old standard)
 	bool WindowIsMaximized(WId win);
+	int WindowIsFullscreen(WId win); //Returns the screen number if the window is fullscreen (or -1)
 	QIcon WindowIcon(WId win); //_NET_WM_ICON
 	
 	//Window Modification
 	void SetAsSticky(WId); //Stick to all workspaces
+	void SetDisableWMActions(WId); //Disable WM control (shortcuts/automatic functions)
 	void SetAsPanel(WId); //Adjust all the window flags for a proper panel (cannot be done through Qt)
+	void SetAsDesktop(WId); //Adjust window flags to set as the desktop
 	void CloseWindow(WId); //request that the window be closed
 	void KillClient(WId); //Force the application that created the window to close
 	void MinimizeWindow(WId); //request that the window be unmapped/minimized
 	void ActivateWindow(WId); //request that the window become active
 	void MaximizeWindow(WId win, bool flagsonly = false); //request that the window become maximized
 	void MoveResizeWindow(WId win, QRect geom);
+	void ReserveLocation(WId win, QRect geom, QString loc);
 	
 	//Window Embedding/Detaching (for system tray)
 	uint EmbedWindow(WId win, WId container); //returns the damage ID (or 0 for an error)

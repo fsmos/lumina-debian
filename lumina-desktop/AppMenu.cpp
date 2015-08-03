@@ -16,6 +16,8 @@ AppMenu::AppMenu(QWidget* parent) : QMenu(parent){
     connect(watcher, SIGNAL(directoryChanged(QString)), this, SLOT(watcherUpdate()) );
   //QTimer::singleShot(200, this, SLOT(start()) ); //Now start filling the menu
   start(); //do the initial run during session init so things are responsive immediately.
+  connect(QApplication::instance(), SIGNAL(LocaleChanged()), this, SLOT(watcherUpdate()) );
+  connect(QApplication::instance(), SIGNAL(IconThemeChanged()), this, SLOT(watcherUpdate()) );
 }
 
 AppMenu::~AppMenu(){
@@ -30,6 +32,10 @@ QHash<QString, QList<XDGDesktop> >* AppMenu::currentAppHash(){
 //  PRIVATE
 //===========
 void AppMenu::updateAppList(){
+  //Make sure the title/icon are updated as well (in case of locale/icon change)
+  this->setTitle(tr("Applications"));
+  this->setIcon( LXDG::findIcon("system-run","") );
+  //Now update the lists
   this->clear();
   APPS.clear();
   QList<XDGDesktop> allfiles = LXDG::systemDesktopFiles();
@@ -77,10 +83,31 @@ void AppMenu::updateAppList(){
       connect(menu, SIGNAL(triggered(QAction*)), this, SLOT(launchApp(QAction*)) );
       QList<XDGDesktop> appL = APPS.value(cats[i]);
       for( int a=0; a<appL.length(); a++){
-        QAction *act = new QAction(LXDG::findIcon(appL[a].icon, ""), appL[a].name, this);
-        act->setToolTip(appL[a].comment);
-        act->setWhatsThis(appL[a].filePath);
-        menu->addAction(act);
+	if(appL[a].actions.isEmpty()){
+	  //Just a single entry point - no extra actions
+          QAction *act = new QAction(LXDG::findIcon(appL[a].icon, ""), appL[a].name, this);
+          act->setToolTip(appL[a].comment);
+          act->setWhatsThis(appL[a].filePath);
+          menu->addAction(act);
+	}else{
+	  //This app has additional actions - make this a sub menu
+	  // - first the main menu/action
+	  QMenu *submenu = new QMenu(appL[a].name, this);
+	    submenu->setIcon( LXDG::findIcon(appL[a].icon,"") );
+	      //This is the normal behavior - not a special sub-action (although it needs to be at the top of the new menu)
+	      QAction *act = new QAction(LXDG::findIcon(appL[a].icon, ""), appL[a].name, this);
+              act->setToolTip(appL[a].comment);
+              act->setWhatsThis(appL[a].filePath);
+	    submenu->addAction(act);
+	    //Now add entries for every sub-action listed
+	    for(int sa=0; sa<appL[a].actions.length(); sa++){
+              QAction *sact = new QAction(LXDG::findIcon(appL[a].actions[sa].icon, appL[a].icon), appL[a].actions[sa].name, this);
+              sact->setToolTip(appL[a].comment);
+              sact->setWhatsThis("-action \""+appL[a].actions[sa].ID+"\" \""+appL[a].filePath+"\"");
+              submenu->addAction(sact);		    
+	    }
+	  menu->addMenu(submenu);
+	}
       }
       this->addMenu(menu);
     }
@@ -91,8 +118,6 @@ void AppMenu::updateAppList(){
 //  PRIVATE SLOTS
 //=================
 void AppMenu::start(){
-  this->setTitle(tr("Applications"));
-  this->setIcon( LXDG::findIcon("system-run","") );
   //Setup the watcher
   watcher->addPaths(LXDG::systemApplicationDirs());
   //Now fill the menu the first time
@@ -118,5 +143,9 @@ void AppMenu::launchFileManager(){
 
 void AppMenu::launchApp(QAction *act){
   QString appFile = act->whatsThis();
-  LSession::LaunchApplication("lumina-open \""+appFile+"\"");
+  if(appFile.startsWith("-action")){
+    LSession::LaunchApplication("lumina-open "+appFile); //already has quotes put in place properly
+  }else{
+    LSession::LaunchApplication("lumina-open \""+appFile+"\"");
+  }
 }

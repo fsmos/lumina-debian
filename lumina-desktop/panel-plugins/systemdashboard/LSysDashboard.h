@@ -50,6 +50,16 @@ private slots:
 	void closeMenu();
 	
 public slots:
+	void LocaleChange(){
+	  updateIcon(true);
+	  sysmenu->UpdateMenu();
+	}
+	
+	void ThemeChange(){
+	  updateIcon(true);
+	  sysmenu->UpdateMenu();
+	}
+	
 	void OrientationChange(){
 	  if(this->layout()->direction()==QBoxLayout::LeftToRight){
 	    this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::MinimumExpanding);

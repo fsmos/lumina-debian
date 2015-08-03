@@ -8,7 +8,7 @@ isEmpty(PREFIX) {
 target.path = $$PREFIX/bin
 
 isEmpty(LIBPREFIX) {
- LIBPREFIX = $$PREFIX/lib
+ LIBPREFIX = $$DESTDIR$$PREFIX/lib
 }
 
 TEMPLATE = app
@@ -105,3 +105,7 @@ desktop.files=lumina-info.desktop
 desktop.path=$$PREFIX/share/applications/
 
 INSTALLS += target dotrans desktop
+
+NO_I18N{
+  INSTALLS -= dotrans
+}

@@ -14,6 +14,7 @@
 #include <QDebug>
 #include <QDesktopWidget>
 #include <QImageReader>
+#include <QRegExp>
 
 #include <LuminaOS.h>
 #include <LuminaThemes.h>
@@ -24,7 +25,7 @@ static QStringList fav;
 //  LUtils Functions
 //=============
 QString LUtils::LuminaDesktopVersion(){ 
-  return "0.8.5-release"; 
+  return "0.8.6-Release"; 
 }
 
 int LUtils::runCmd(QString cmd, QStringList args){
@@ -130,11 +131,12 @@ QStringList LUtils::imageExtensions(){
   return imgExtensions;
 }
 
-void LUtils::LoadTranslation(QApplication *app, QString appname){
+ QTranslator* LUtils::LoadTranslation(QApplication *app, QString appname, QString locale, QTranslator *cTrans){
    //Get the current localization
     QString langEnc = "UTF-8"; //default value
-    QString langCode = getenv("LANG");
+    QString langCode = locale; //provided locale
     if(langCode.isEmpty()){ langCode = getenv("LC_ALL"); }
+    if(langCode.isEmpty()){ langCode = getenv("LANG"); }
     if(langCode.isEmpty()){ langCode = "en_US.UTF-8"; } //default to US english
     //See if the encoding is included and strip it out as necessary
     if(langCode.contains(".")){
@@ -147,20 +149,100 @@ void LUtils::LoadTranslation(QApplication *app, QString appname){
     }
     if(app !=0){
       qDebug() << "Loading Locale:" << appname << langCode << langEnc;
+      //If an existing translator was provided, remove it first (will be replaced)
+      if(cTrans!=0){ app->removeTranslator(cTrans); }
       //Setup the translator
-      QTranslator *CurTranslator = new QTranslator();
+      cTrans = new QTranslator();
       //Use the shortened locale code if specific code does not have a corresponding file
-      if(!QFile::exists(LOS::LuminaShare()+"i18n/"+appname+"_" + langCode + ".qm") ){
+      if(!QFile::exists(LOS::LuminaShare()+"i18n/"+appname+"_" + langCode + ".qm") && langCode!="en_US" ){
         langCode.truncate( langCode.indexOf("_") );
       }
-      CurTranslator->load( appname+QString("_") + langCode, LOS::LuminaShare()+"i18n/" );
-      app->installTranslator( CurTranslator );
+      if( cTrans->load( appname+QString("_") + langCode, LOS::LuminaShare()+"i18n/" ) ){
+        app->installTranslator( cTrans );
+      }else{
+	//Translator could not be loaded for some reason
+	cTrans = 0;
+	if(langCode!="en_US"){
+	  qWarning() << " - Could not load Locale:" << langCode;
+	}
+      }
     }else{
       //Only going to set the encoding since no application given
       qDebug() << "Loading System Encoding:" << langEnc;
     }
     //Load current encoding for this locale
     QTextCodec::setCodecForLocale( QTextCodec::codecForName(langEnc.toUtf8()) ); 
+    return cTrans;
+}
+
+QStringList LUtils::knownLocales(){
+  QDir i18n = QDir(LOS::LuminaShare()+"i18n");
+    if( !i18n.exists() ){ return QStringList(); }
+  QStringList files = i18n.entryList(QStringList() << "lumina-desktop_*.qm", QDir::Files, QDir::Name);
+    if(files.isEmpty()){ return QStringList(); }
+  //Now strip off the filename and just leave the locale tag
+  for(int i=0; i<files.length(); i++){
+     files[i].chop(3); //remove the ".qm" on the end
+     files[i] = files[i].section("_",1,50).simplified();
+  }
+  files << "en_US"; //default locale
+  files.sort();
+  return files;
+}
+
+void LUtils::setLocaleEnv(QString lang, QString msg, QString time, QString num,QString money,QString collate, QString ctype){
+  //Adjust the current locale environment variables
+  bool all = false;
+  if(msg.isEmpty() && time.isEmpty() && num.isEmpty() && money.isEmpty() && collate.isEmpty() && ctype.isEmpty() ){
+    if(lang.isEmpty()){ return; } //nothing to do - no changes requested
+    all = true; //set everything to the "lang" value
+  }
+  //If no lang given, but others are given, then use the current setting
+  if(lang.isEmpty()){ lang = getenv("LC_ALL"); }
+  if(lang.isEmpty()){ lang = getenv("LANG"); }
+  if(lang.isEmpty()){ lang = "en_US"; }
+  //Now go through and set/unset the environment variables
+  // - LANG & LC_ALL
+  if(!lang.contains(".")){ lang.append(".UTF-8"); }
+  setenv("LANG",lang.toUtf8() ,1); //overwrite setting (this is always required as the fallback)
+  if(all){ setenv("LC_ALL",lang.toUtf8() ,1); }
+  else{ unsetenv("LC_ALL"); } //make sure the custom settings are used
+  // - LC_MESSAGES
+  if(msg.isEmpty()){ unsetenv("LC_MESSAGES"); }
+  else{
+    if(!msg.contains(".")){ msg.append(".UTF-8"); }
+    setenv("LC_MESSAGES",msg.toUtf8(),1);
+  }
+  // - LC_TIME
+  if(time.isEmpty()){ unsetenv("LC_TIME"); }
+  else{
+    if(!time.contains(".")){ time.append(".UTF-8"); }
+    setenv("LC_TIME",time.toUtf8(),1);
+  }
+    // - LC_NUMERIC
+  if(num.isEmpty()){ unsetenv("LC_NUMERIC"); }
+  else{
+    if(!num.contains(".")){ num.append(".UTF-8"); }
+    setenv("LC_NUMERIC",num.toUtf8(),1);
+  }
+    // - LC_MONETARY
+  if(money.isEmpty()){ unsetenv("LC_MONETARY"); }
+  else{
+    if(!money.contains(".")){ money.append(".UTF-8"); }
+    setenv("LC_MONETARY",money.toUtf8(),1);
+  }
+    // - LC_COLLATE
+  if(collate.isEmpty()){ unsetenv("LC_COLLATE"); }
+  else{
+    if(!collate.contains(".")){ collate.append(".UTF-8"); }
+    setenv("LC_COLLATE",collate.toUtf8(),1);
+  }
+    // - LC_CTYPE
+  if(ctype.isEmpty()){ unsetenv("LC_CTYPE"); }
+  else{
+    if(!ctype.contains(".")){ ctype.append(".UTF-8"); }
+    setenv("LC_CTYPE",ctype.toUtf8(),1);
+  }	
 }
 
 double LUtils::DisplaySizeToBytes(QString num){
@@ -202,19 +284,24 @@ QStringList LUtils::listQuickPlugins(){
   QDir dir(QDir::homePath()+"/.lumina/quickplugins");
   QStringList files = dir.entryList(QStringList() << "quick-*.qml", QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
   dir.cd(LOS::LuminaShare()+"quickplugins");
-  files << files = dir.entryList(QStringList() << "quick-*.qml", QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+  files << dir.entryList(QStringList() << "quick-*.qml", QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
   for(int i=0; i<files.length(); i++){
     files[i] = files[i].section("quick-",1,100).section(".qml",0,0); //just grab the ID out of the middle of the filename
   }
   files.removeDuplicates();
+  //qDebug() << "Found Quick Plugins:" << files;
   return files;
 }
 
 QStringList LUtils::infoQuickPlugin(QString ID){ //Returns: [Name, Description, Icon]
+  //qDebug() << "Find Quick Info:" << ID;
   QString path = findQuickPluginFile(ID);
+  //qDebug() << " - path:" << path;
   if(path.isEmpty()){ return QStringList(); } //invalid ID
-  QStringList contents = LUtils::readFile(path).filter("//").filter("=").filter("Plugin");
+  QStringList contents = LUtils::readFile(path);
   if(contents.isEmpty()){ return QStringList(); } //invalid file (unreadable)
+  contents = contents.filter("//").filter("=").filter("Plugin"); //now just grab the comments
+  //qDebug() << " - Filtered Contents:" << contents;
   QStringList info; info << "" << "" << "";
   for(int i=0; i<contents.length(); i++){
     if(contents[i].contains("Plugin-Name=")){ info[0] = contents[i].section("Plugin-Name=",1,1).simplified(); }
@@ -223,6 +310,7 @@ QStringList LUtils::infoQuickPlugin(QString ID){ //Returns: [Name, Description, 
   }
   if(info[0].isEmpty()){ info[0]=ID; }
   if(info[2].isEmpty()){ info[2]="preferences-plugin"; }
+  //qDebug() << " - info:" << info;
   return info;
 }
 
@@ -351,17 +439,37 @@ void LUtils::LoadSystemDefaults(bool skipOS){
     //Change in 0.8.5 - use "_" instead of "." within variables names - need backwards compat for a little while
     if(var.contains(".")){ var.replace(".","_"); } 
     //Now parse the variable and put the value in the proper file   
-
-    if(var=="session_enablenumlock"){ sesset << "EnableNumlock="+ istrue; }
-    else if(var=="session_playloginaudio"){ sesset << "PlayStartupAudio="+istrue; }
-    else if(var=="session_playlogoutaudio"){ sesset << "PlayLogoutAudio="+istrue; }
-    else if(var=="session_default_terminal"){ sesset << "default-terminal="+val; }
-    else if(var=="session_default_filemanager"){ 
-      sesset << "default-filemanager="+val;
-      lopenset << "directory="+val; 
+  
+     //Special handling for values which need to exist first
+    if(var.endsWith("_ifexists") ){ 
+      var = var.remove("_ifexists"); //remove this flag from the variable
+      //Check if the value exists (absolute path only)
+      if(!QFile::exists(val)){ continue; } //skip this line - value/file does not exist
     }
-    else if(var=="session_default_webbrowser"){ lopenset << "webbrowser="+val; }
-    else if(var=="session_default_email"){ lopenset << "email="+val; }
+    //Parse/save the value
+    QString loset, sset; //temporary strings
+    if(var=="session_enablenumlock"){ sset = "EnableNumlock="+ istrue; }
+    else if(var=="session_playloginaudio"){ sset = "PlayStartupAudio="+istrue; }
+    else if(var=="session_playlogoutaudio"){ sset = "PlayLogoutAudio="+istrue; }
+    else if(var=="session_default_terminal"){ sset = "default-terminal="+val; }
+    else if(var=="session_default_filemanager"){ 
+      sset = "default-filemanager="+val;
+      loset = "directory="+val; 
+    }
+    else if(var=="session_default_webbrowser"){ loset = "webbrowser="+val; }
+    else if(var=="session_default_email"){ loset = "email="+val; }
+    //Put the line into the file (overwriting any previous assignment as necessary)
+    if(!loset.isEmpty()){
+      int index = lopenset.indexOf(QRegExp(loset.section("=",0,0)+"=*", Qt::CaseSensitive, QRegExp::Wildcard));
+      qDebug() << "loset line:" << loset << index << lopenset;
+      if(index<0){ lopenset << loset; } //new line
+      else{ lopenset[index] = loset; } //overwrite the other line
+    }
+    if(!sset.isEmpty()){
+      int index = sesset.indexOf(QRegExp(sset.section("=",0,0)+"=*", Qt::CaseSensitive, QRegExp::Wildcard));
+      if(index<0){ sesset << sset; } //new line
+      else{ sesset[index] = sset; } //overwrite the other line	    
+    }
   }
   if(!lopenset.isEmpty()){ lopenset.prepend("[default]"); } //the session options exist within this set
 
